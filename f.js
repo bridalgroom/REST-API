@@ -11,11 +11,72 @@ app.use(bodyParser.json());
 
 // PostgreSQL connection pool
 const pool = new Pool({
- connectionString: process.env.DATABASE_URL
+  user: process.env.DB_USER,
+  host: process.env.DB_HOST,
+  database: process.env.DB_NAME,
+  password: process.env.DB_PASSWORD,
+  port: process.env.DB_PORT,
+  
+});
+
+// Check database connection
+pool.connect((err, client, release) => {
+  if (err) {
+    return console.error('Error acquiring client', err.stack);
+  }
+  console.log('Database connected successfully');
+  release();
+});
+
+// Endpoint to initialize the database schema
+app.get('/init-db', async (req, res) => {
+  const createTablesQuery = `
+    CREATE TABLE IF NOT EXISTS session_updates (
+      id SERIAL PRIMARY KEY,
+      timestamp TIMESTAMP NOT NULL,
+      session_id VARCHAR(255) NOT NULL,
+      device_id VARCHAR(255) NOT NULL,
+      session_status VARCHAR(50) NOT NULL CHECK (session_status IN ('started', 'stopped'))
+    );
+
+    CREATE TABLE IF NOT EXISTS session_updates1 (
+      id SERIAL PRIMARY KEY,
+      timestamp TIMESTAMP NOT NULL,
+      session_id VARCHAR(255) NOT NULL,
+      device_id VARCHAR(255) NOT NULL,
+      voltage VARCHAR(255),
+      current VARCHAR(255),
+      kwh VARCHAR(255),
+      session_run_time VARCHAR(255)
+    );
+
+    CREATE TABLE IF NOT EXISTS device_commands (
+      id SERIAL PRIMARY KEY,
+      timestamp TIMESTAMP NOT NULL,
+      request_id VARCHAR(255) NOT NULL,
+      device_id VARCHAR(255) NOT NULL,
+      command VARCHAR(50) NOT NULL CHECK (command IN ('start', 'stop'))
+    );
+
+    CREATE TABLE IF NOT EXISTS device_updates (
+      id SERIAL PRIMARY KEY,
+      timestamp TIMESTAMP NOT NULL,
+      response_id VARCHAR(255) NOT NULL,
+      device_id VARCHAR(255) NOT NULL,
+      error_code VARCHAR(50) NOT NULL
+    );
+  `;
+
+  try {
+    await pool.query(createTablesQuery);
+    res.status(200).send('Database initialized successfully');
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // POST route to handle session start/stop updates
-app.post('/sessionUpdate', async (req, res) => {
+app.post('/sessionUpdates', async (req, res) => {
   const { timestamp, sessionId, deviceId, sessionStatus } = req.body;
   if (!timestamp || !sessionId || !deviceId || !sessionStatus) {
     return res.status(400).send('Missing required fields');
@@ -31,8 +92,18 @@ app.post('/sessionUpdate', async (req, res) => {
   }
 });
 
+// GET route to fetch all session updates
+app.get('/sessionUpdates', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM session_updates');
+    res.status(200).json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // POST route to handle session updates with additional data
-app.post('/sessionUpdate1', async (req, res) => {
+app.post('/sessionUpdates1', async (req, res) => {
   const { timestamp, sessionId, deviceId, voltage, current, kwh, sessionRunTime } = req.body;
   if (!timestamp || !sessionId || !deviceId) {
     return res.status(400).send('Missing required fields');
@@ -43,6 +114,16 @@ app.post('/sessionUpdate1', async (req, res) => {
       [timestamp, sessionId, deviceId, voltage, current, kwh, sessionRunTime]
     );
     res.status(201).json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET route to fetch all session updates with additional data
+app.get('/sessionUpdates1', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM session_updates1');
+    res.status(200).json(result.rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -65,8 +146,18 @@ app.post('/deviceId', async (req, res) => {
   }
 });
 
+// GET route to fetch all device commands
+app.get('/deviceId', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM device_commands');
+    res.status(200).json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // POST route to handle device updates
-app.post('/deviceUpdates', async (req, res) => {
+app.post('/deviceUpdate', async (req, res) => {
   const { timestamp, responseId, deviceId, errorCode } = req.body;
   if (!timestamp || !responseId || !deviceId || !errorCode) {
     return res.status(400).send('Missing required fields');
@@ -81,30 +172,8 @@ app.post('/deviceUpdates', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-app.get('/sessionUpdates', async (req, res) => {
-  try {
-    const result = await pool.query('SELECT * FROM session_updates');
-    res.status(200).json(result.rows);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-app.get('/sessionUpdates1', async (req, res) => {
-  try {
-    const result = await pool.query('SELECT * FROM session_updates1');
-    res.status(200).json(result.rows);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-app.get('/deviceId', async (req, res) => {
-  try {
-    const result = await pool.query('SELECT * FROM device_commands');
-    res.status(200).json(result.rows);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
+
+// GET route to fetch all device updates
 app.get('/deviceUpdates', async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM device_updates');
