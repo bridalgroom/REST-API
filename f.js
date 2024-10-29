@@ -152,7 +152,7 @@ app.get('/deviceId', async (req, res) => {
 });
 
 // POST route to handle device updates
-app.post('/deviceUpdate', async (req, res) => {
+app.post('/deviceUpdates', async (req, res) => {
   const { timestamp, responseId, deviceId, errorCode } = req.body;
   if (!timestamp || !responseId || !deviceId || !errorCode) {
     return res.status(400).send('Missing required fields');
